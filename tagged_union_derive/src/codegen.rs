@@ -31,27 +31,85 @@ pub fn expand(input: &DeriveInput) -> Result<Tokens, Error> {
     let tags = generate_tags(base_name, variants);
     let typemap = typemap_for(&variants)?;
 
-    // codegen
     let constants = tag_codegen(&tags);
     let the_union = union_codegen(base_name, &typemap);
     let the_struct = generate_tagged(base_name);
+    let tagged_union_impl = generate_tagged_union_impl(base_name, &tags, &typemap);
 
     Ok(quote!{
         #constants
         #the_union
         #the_struct
+        #tagged_union_impl
     })
 }
 
+fn generate_tagged_union_impl(base_name: &str, tags: &[Tag], typemap: &TypeMap) -> Tokens {
+    let name = QuotedIdent::new(base_name);
+    let union_name = format_union_name(base_name);
+    let tagged_name = format_tagged_name(base_name);
+
+    let as_tagged_method = quote!{
+        fn as_tagged(&self) -> Self::Target {
+            match *self {
+                Message::Halt => TaggedMessage {
+                    tag: MESSAGE_HALT,
+                    kind: MessageKind { empty: () },
+                },
+                Message::Wait(n) => TaggedMessage {
+                    tag: MESSAGE_WAIT,
+                    kind: MessageKind { wait: n },
+                },
+                Message::Move(n) => TaggedMessage {
+                    tag: MESSAGE_MOVE,
+                    kind: MessageKind { move_: n },
+                },
+            }
+        }
+    };
+
+    let from_tagged_method = quote!{
+        unsafe fn from_tagged(tagged: &Self::Target) -> Result<Self, InvalidTag> {
+            match tagged.tag {
+                MESSAGE_HALT => Ok(Message::Halt),
+                MESSAGE_WAIT => Ok(Message::Wait(tagged.kind.wait)),
+                MESSAGE_MOVE => Ok(Message::Move(tagged.kind.move_)),
+                _ => Err(InvalidTag {
+                    got: tagged.tag,
+                    possible_tags: 0..3,
+                }),
+            }
+        }
+    };
+
+    quote!{
+        impl TaggedUnion for #name {
+            type Target = #tagged_name;
+
+            #as_tagged_method
+
+            #from_tagged_method
+        }
+    }
+}
+
+fn format_union_name(base_name: &str) -> QuotedIdent {
+    QuotedIdent::new(format!("{}Kind", base_name))
+}
+
+fn format_tagged_name(base_name: &str) -> QuotedIdent {
+    QuotedIdent::new(format!("Tagged{}", base_name))
+}
+
 fn generate_tagged(base_name: &str) -> Tokens {
-    let name = QuotedIdent::new(format!("Tagged{}", base_name));
-    let union_name = QuotedIdent::new(format!("{}Kind", base_name));
+    let name = format_tagged_name(base_name);
+    let union_name = format_union_name(base_name);
 
     quote! {
-        #[derive(Debug, Copy, Clone)]
+        #[derive(Copy, Clone)]
         #[repr(C)]
         pub struct #name {
-            pub tag: usize,
+            pub tag: u32,
             pub kind: #union_name,
         }
     }
@@ -84,9 +142,11 @@ fn typemap_for(variants: &[Variant]) -> Result<TypeMap, Error> {
     Ok(map)
 }
 
+/// Generate the list of constants we'll be using as tags.
 fn tag_codegen(tags: &[Tag]) -> Tokens {
     let constants = tags.iter().cloned().map(|tag| {
-        let Tag { name, number } = tag;
+        let name = tag.constant_tag;
+        let number = tag.number;
         let ident = QuotedIdent::new(name);
 
         quote!{
@@ -100,12 +160,13 @@ fn tag_codegen(tags: &[Tag]) -> Tokens {
     tokens
 }
 
+/// Generate the union's definition.
 fn union_codegen(base_name: &str, typemap: &TypeMap) -> Tokens {
     let fields = typemap
         .iter()
         .map(|(ty, original_values)| (original_values[0].to_string().to_lowercase(), ty))
         .map(|(name, ty)| (ty, QuotedIdent::new(name)))
-        .map(|(name, ty)| quote!(#ty: #name,));
+        .map(|(name, ty)| quote!(pub #ty: #name,));
 
     let mut tokens = Tokens::new();
     tokens.append_all(fields);
@@ -113,7 +174,8 @@ fn union_codegen(base_name: &str, typemap: &TypeMap) -> Tokens {
     let union_name = QuotedIdent::new(format!("{}Kind", base_name));
 
     quote!{
-        #[derive(Debug, Copy, Clone)]
+        #[derive(Copy, Clone)]
+        #[repr(C)]
         pub union #union_name {
             #tokens
         }
@@ -130,23 +192,27 @@ fn generate_tags(enum_name: &str, variants: &[Variant]) -> Vec<Tag> {
 
     variants
         .iter()
-        .map(|var| format!("{}_{}", prefix, var.ident.as_ref().to_uppercase()))
         .enumerate()
-        .map(|(i, name)| Tag::new(name, i as u32))
+        .map(|(i, variant)| Tag::new(&prefix, variant.ident.as_ref(), i as u32))
         .collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
 struct Tag {
-    name: String,
+    original_name: String,
+    constant_tag: String,
     number: u32,
 }
 
 impl Tag {
-    pub fn new<S: Into<String>>(name: S, number: u32) -> Tag {
+    pub fn new<S: Into<String>>(prefix: &str, field_name: S, number: u32) -> Tag {
+        let original_name = field_name.into();
+        let constant_tag = format!("{}_{}", prefix, original_name.to_uppercase());
+
         Tag {
-            name: name.into(),
-            number: number,
+            constant_tag,
+            original_name,
+            number,
         }
     }
 }
@@ -170,9 +236,9 @@ mod tests {
     fn tag_for_variant() {
         let src = "enum Foo { Halt, Move(usize), Wait { secs: i64 }, }";
         let should_be = vec![
-            Tag::new("FOO_HALT", 0),
-            Tag::new("FOO_MOVE", 1),
-            Tag::new("FOO_WAIT", 2),
+            Tag::new("FOO", "Halt", 0),
+            Tag::new("FOO", "Move", 1),
+            Tag::new("FOO", "Wait", 2),
         ];
 
         let (parsed, variants) = parse_enum(src);
