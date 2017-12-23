@@ -42,6 +42,17 @@ main() {
            --git japaric/cross \
            --tag $tag \
            --target $target
+
+
+    # Some targets will require nightly or xargo, so we check for the 
+    # corresponding variables and install them if need be.
+    if [ "$NIGHTLY" -eq 1 ]; then
+        rustup default nightly
+    fi
+
+    if [ "$NIGHTLY" -eq 1 ]; then
+        cargo install xargo || echo "Xargo already installed"
+    fi
 }
 
 main
