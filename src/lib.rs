@@ -3,9 +3,12 @@
 #[cfg(feature = "example")]
 #[macro_use]
 extern crate tagged_union_derive;
+#[cfg(test)]
+extern crate std;
 
 #[cfg(feature = "example")]
 pub mod example;
+
 
 use core::ops::Range;
 

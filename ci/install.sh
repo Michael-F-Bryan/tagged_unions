@@ -44,13 +44,10 @@ main() {
            --target $target
 
 
-    # Some targets will require nightly or xargo, so we check for the 
-    # corresponding variables and install them if need be.
-    if [ "$NIGHTLY" -eq 1 ]; then
-        rustup default nightly
-    fi
-
-    if [ "$NIGHTLY" -eq 1 ]; then
+    # Some targets will require xargo, so we check for the corresponding
+    # variables and install them if need be.
+    if [ "$XARGO" -eq 1 ]; then
+        rustup component add rust-src
         cargo install xargo || echo "Xargo already installed"
     fi
 }
