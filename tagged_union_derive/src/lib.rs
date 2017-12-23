@@ -12,7 +12,9 @@ pub fn tagged_union(input: TokenStream) -> TokenStream {
     let input = input.to_string();
     let definition = syn::parse_derive_input(&input).unwrap();
 
-    apply_assertions(&definition).unwrap();
+    if let Err(e) = apply_assertions(&definition) {
+        panic!("{}", e);
+    }
 
     quote!().parse().unwrap()
 }
@@ -27,12 +29,6 @@ fn apply_assertions(input: &DeriveInput) -> Result<(), String> {
         return Err("The TaggedUnion derive can only be used on enums.".to_string());
     }
 
-    let is_copy_type = input.attrs.iter().find(|attr| is_copy_attr(attr)).is_some();
-
-    if !is_copy_type {
-        return Err(format!("Rust unions only (currently) work with Copy types, therefore {} also needs to be Copy.", input.ident));
-    }
-
     if is_generic(&input.generics) {
         return Err("You can't derive TaggedUnion on a generic type.".to_string());
     }
@@ -40,44 +36,6 @@ fn apply_assertions(input: &DeriveInput) -> Result<(), String> {
     Ok(())
 }
 
-fn is_copy_attr(attr: &Attribute) -> bool {
-    if attr.name() != "derive" {
-        return false;
-    }
-
-    if let MetaItem::List(_, ref items) = attr.value {
-        for item in items {
-            if let NestedMetaItem::MetaItem(MetaItem::Word(ref ident)) = *item {
-                if ident.to_string() == "Copy" {
-                    return true;
-                }
-            }
-        }
-    }
-
-    false
-}
-
 fn is_generic(gen: &Generics) -> bool {
-    gen.lifetimes.is_empty() && gen.ty_params.is_empty() && gen.where_clause.predicates.is_empty()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn find_copy_types() {
-        let inputs = vec![("#[derive(Copy)]", true), 
-                          ("#[derive(Debug, Clone, PartialEq)]", false), 
-                          ("#[macro_use]", false), 
-                          ("#[rename = false]", false)];
-
-        for (src, should_be) in inputs {
-            let attr = syn::parse_outer_attr(src).unwrap();
-            let got = is_copy_attr(&attr);
-
-            assert_eq!(got, should_be, "{}", src);
-        }
-    }
+    !gen.lifetimes.is_empty() || !gen.ty_params.is_empty() || !gen.where_clause.predicates.is_empty()
 }
