@@ -4,11 +4,11 @@
 #[macro_use]
 extern crate tagged_union_derive;
 
-#[cfg(feature = "example")]
-pub mod example;
+// TODO: uncomment this when the proc macro is fully functional
+// #[cfg(feature = "example")]
+// pub mod example;
 
 use core::ops::Range;
-
 
 pub trait TaggedUnion: Sized {
     type Target;

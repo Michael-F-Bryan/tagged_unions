@@ -1,16 +1,15 @@
-extern crate proc_macro;
 #[macro_use]
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
-extern crate syn;
+extern crate proc_macro;
 #[macro_use]
 extern crate quote;
+extern crate syn;
 
 mod codegen;
 
 use proc_macro::TokenStream;
-
 
 #[proc_macro_derive(TaggedUnion)]
 pub fn tagged_union(input: TokenStream) -> TokenStream {
@@ -19,7 +18,6 @@ pub fn tagged_union(input: TokenStream) -> TokenStream {
 
     match codegen::expand(&definition) {
         Ok(tokens) => tokens.parse().unwrap(),
-        Err(e) => 
-        panic!("{}", e)
+        Err(e) => panic!("{}", e),
     }
 }

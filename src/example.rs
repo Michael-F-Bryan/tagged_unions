@@ -1,4 +1,4 @@
-use {TaggedUnion, InvalidTag};
+use {InvalidTag, TaggedUnion};
 
 /// Example
 #[derive(Debug, Copy, Clone, TaggedUnion)]
@@ -47,9 +47,18 @@ impl TaggedUnion for Message {
 
     fn as_tagged(&self) -> Self::Target {
         match *self {
-            Message::Halt => TaggedMessage { tag: MESSAGE_HALT, kind: MessageKind { empty: () } },
-            Message::Wait(n) => TaggedMessage { tag: MESSAGE_WAIT, kind: MessageKind { wait: n } },
-            Message::Move(n) => TaggedMessage { tag: MESSAGE_MOVE, kind: MessageKind { move_: n } },
+            Message::Halt => TaggedMessage {
+                tag: MESSAGE_HALT,
+                kind: MessageKind { empty: () },
+            },
+            Message::Wait(n) => TaggedMessage {
+                tag: MESSAGE_WAIT,
+                kind: MessageKind { wait: n },
+            },
+            Message::Move(n) => TaggedMessage {
+                tag: MESSAGE_MOVE,
+                kind: MessageKind { move_: n },
+            },
         }
     }
 

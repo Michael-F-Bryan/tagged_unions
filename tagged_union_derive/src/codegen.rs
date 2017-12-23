@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
 use failure::Error;
-use syn::{self, Attribute, Body, DeriveInput, Generics, MetaItem, NestedMetaItem, Ident, Ty, Variant, VariantData};
-use quote::Tokens;
+use syn::{self, Attribute, Body, DeriveInput, Generics, Ident, MetaItem, NestedMetaItem, Ty,
+          Variant, VariantData};
+use quote::{Ident as QuotedIdent, Tokens};
 
 type TypeMap = HashMap<Ty, Vec<Ident>>;
 
-/// Analyse the derive input
-/// 
+/// Analyse the derive input and figure out what we need to generate.
+///
 /// For some enum, `Foo`, this will:
-/// 
-/// - Generate a list of tags
+///
+/// - Generate a list of tags (constants)
 /// - Create a `TaggedFoo` struct for `Foo`
 /// - Create the `FooKind` union
 /// - Implement `TaggedUnion` for `Foo`.
@@ -24,48 +25,73 @@ pub fn expand(input: &DeriveInput) -> Result<Tokens, Error> {
         bail!("You can't derive TaggedUnion on a generic type.");
     }
 
-    let tags = generate_tags(input.ident.as_ref(), variants);
+    // We use the enum's name as a base when naming generated content
+    let base_name = input.ident.as_ref();
+
+    // the analysis stage
+    let tags = generate_tags(base_name, variants);
     let typemap = typemap_for(&variants)?;
 
-    unimplemented!()
+    // codegen
+    let constants = tag_codegen(&tags);
+
+    Ok(constants)
 }
 
 /// Generate a list of all the types the `FooKind` union will need to contain.
-/// Because you can get more than one variant containing the same underlying 
+/// Because you can get more than one variant containing the same underlying
 /// type we use a `TypeMap` to preserve the relations.
 fn typemap_for(variants: &[Variant]) -> Result<TypeMap, Error> {
     let mut map = TypeMap::new();
     let unit = syn::parse_type("()").unwrap();
 
     for variant in variants {
-        match variant.data {
+        let ty = match variant.data {
             VariantData::Struct(_) => bail!("Struct variants aren't supported."),
-            VariantData::Tuple(ref fields) =>  {
+            VariantData::Tuple(ref fields) => {
                 if fields.len() > 1 {
                     bail!("Tuple variants with more than one element aren't supported.");
                 }
+                fields[0].ty.clone()
+            }
+            VariantData::Unit => unit.clone(),
+        };
 
-                map.entry(fields[0].ty.clone()).or_insert_with(Default::default).push(variant.ident.clone());
-            }
-            VariantData::Unit => {
-                map.entry(unit.clone()).or_insert_with(Default::default).push(variant.ident.clone());
-            }
-        }
+        map.entry(ty)
+            .or_insert_with(Default::default)
+            .push(variant.ident.clone());
     }
 
     Ok(map)
 }
 
+fn tag_codegen(tags: &[Tag]) -> Tokens {
+    let constants = tags.iter().cloned().map(|tag| {
+        let Tag { name, number } = tag;
+        let ident = QuotedIdent::new(name);
+
+        quote!{
+            pub const #ident: u32 = #number;
+        }
+    });
+
+    let mut tokens = Tokens::new();
+    tokens.append_all(constants);
+
+    tokens
+}
+
 fn is_generic(gen: &Generics) -> bool {
-    !gen.lifetimes.is_empty() || !gen.ty_params.is_empty() || !gen.where_clause.predicates.is_empty()
+    !gen.lifetimes.is_empty() || !gen.ty_params.is_empty()
+        || !gen.where_clause.predicates.is_empty()
 }
 
 fn generate_tags(enum_name: &str, variants: &[Variant]) -> Vec<Tag> {
     let prefix = enum_name.to_uppercase();
 
-    variants.iter()
-        .map(|var| var.ident.as_ref())
-        .map(|name| format!("{}_{}", prefix, name.to_uppercase()))
+    variants
+        .iter()
+        .map(|var| format!("{}_{}", prefix, var.ident.as_ref().to_uppercase()))
         .enumerate()
         .map(|(i, name)| Tag::new(name, i as u32))
         .collect()
@@ -79,7 +105,7 @@ struct Tag {
 
 impl Tag {
     pub fn new<S: Into<String>>(name: S, number: u32) -> Tag {
-        Tag { 
+        Tag {
             name: name.into(),
             number: number,
         }
@@ -120,19 +146,37 @@ mod tests {
     #[test]
     fn generate_typemap() {
         let src = "enum Foo { Halt, Move(usize), Wait(Bar), }";
-        let should_be = vec![
-            ("()", "Halt"),
-            ("usize", "Move"),
-            ("Bar", "Wait"),
-        ];
+        let should_be = vec![("()", "Halt"), ("usize", "Move"), ("Bar", "Wait")];
 
-        let should_be: TypeMap = should_be.into_iter().map(|(ty, name)| (syn::parse_type(ty).unwrap(), 
-        vec![syn::parse_ident(name).unwrap()])).collect();
+        let should_be: TypeMap = should_be
+            .into_iter()
+            .map(|(ty, name)| {
+                (
+                    syn::parse_type(ty).unwrap(),
+                    vec![syn::parse_ident(name).unwrap()],
+                )
+            })
+            .collect();
 
         let (_, variants) = parse_enum(src);
 
         let got = typemap_for(&variants).unwrap();
 
         assert_eq!(got, should_be);
+    }
+
+    #[test]
+    fn smoke_test() {
+        let src = "enum Foo { Halt, Move(usize), Wait(Bar), }";
+        let (parsed, _) = parse_enum(src);
+
+        let got = expand(&parsed).unwrap();
+
+        // make sure we got valid Rust code
+        let generated_code = got.to_string();
+        if let Err(e) = syn::parse_items(&generated_code) {
+            println!("{}", generated_code);
+            panic!("{}", e);
+        }
     }
 }
