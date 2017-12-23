@@ -47,6 +47,7 @@ main() {
     # Some targets will require xargo, so we check for the corresponding
     # variables and install them if need be.
     if [ "$XARGO" -eq 1 ]; then
+        rustup default nightly
         rustup component add rust-src
         cargo install xargo || echo "Xargo already installed"
     fi

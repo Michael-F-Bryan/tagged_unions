@@ -45,12 +45,10 @@ matrix:
     - env: TARGET=x86_64-pc-windows-gnu
 
     # Bare metal
-    # TODO: Find out why these aren't able to cross-compile
-    - env: TARGET=thumbv6m-none-eabi XARGO=1
-      rust: nightly
+    # TODO: Figure out how we can run the tests instead of skipping them
+    - env: TARGET=thumbv6m-none-eabi XARGO=1 DISABLE_TESTS=1
     # - env: TARGET=thumbv7em-none-eabi
-    - env: TARGET=thumbv7em-none-eabihf XARGO=1
-      rust: nightly
+    - env: TARGET=thumbv7em-none-eabihf XARGO=1 DISABLE_TESTS=1
     # - env: TARGET=thumbv7m-none-eabi
 
     # Testing other channels
