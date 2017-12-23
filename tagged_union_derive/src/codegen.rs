@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use failure::Error;
-use syn::{self, Attribute, Body, DeriveInput, Generics, Ident, MetaItem, NestedMetaItem, Ty,
-          Variant, VariantData};
+use syn::{self, Body, DeriveInput, Generics, Ident, Ty, Variant, VariantData};
 use quote::{Ident as QuotedIdent, Tokens};
 
 type TypeMap = HashMap<Ty, Vec<Ident>>;
@@ -34,8 +33,12 @@ pub fn expand(input: &DeriveInput) -> Result<Tokens, Error> {
 
     // codegen
     let constants = tag_codegen(&tags);
+    let the_union = union_codegen(base_name, &typemap);
 
-    Ok(constants)
+    Ok(quote!{
+        #constants
+        #the_union
+    })
 }
 
 /// Generate a list of all the types the `FooKind` union will need to contain.
@@ -79,6 +82,25 @@ fn tag_codegen(tags: &[Tag]) -> Tokens {
     tokens.append_all(constants);
 
     tokens
+}
+
+fn union_codegen(base_name: &str, typemap: &TypeMap) -> Tokens {
+    let fields = typemap
+        .iter()
+        .map(|(ty, original_values)| (original_values[0].to_string().to_lowercase(), ty))
+        .map(|(name, ty)| (ty, QuotedIdent::new(name)))
+        .map(|(name, ty)| quote!(#ty: #name,));
+
+    let mut tokens = Tokens::new();
+    tokens.append_all(fields);
+
+    let union_name = QuotedIdent::new(format!("{}Kind", base_name));
+
+    quote!{
+        pub union #union_name {
+            #tokens
+        }
+    }
 }
 
 fn is_generic(gen: &Generics) -> bool {
@@ -167,7 +189,7 @@ mod tests {
 
     #[test]
     fn smoke_test() {
-        let src = "enum Foo { Halt, Move(usize), Wait(Bar), }";
+        let src = "enum Foo { Halt, Count(usize), Wait(Bar), }";
         let (parsed, _) = parse_enum(src);
 
         let got = expand(&parsed).unwrap();

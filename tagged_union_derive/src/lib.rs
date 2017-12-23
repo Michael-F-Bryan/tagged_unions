@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate failure;
-#[macro_use]
-extern crate failure_derive;
 extern crate proc_macro;
 #[macro_use]
 extern crate quote;
