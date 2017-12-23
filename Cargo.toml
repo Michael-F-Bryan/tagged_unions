@@ -1,8 +1,10 @@
 [package]
-name = "tagged_unions"
+name = "tagged_union"
 version = "0.1.0"
 authors = ["Michael Bryan <michaelfbryan@gmail.com>"]
 description = "A Rust library for exposing Enums as C-style tagged unions."
 readme = "README.md"
+license = "MIT"
+repository = "https://github.com/Michael-F-Bryan/tagged_unions"
 
 [dependencies]
