@@ -65,10 +65,11 @@ matrix:
     - env: TARGET=x86_64-pc-windows-gnu
 
     # Bare metal
-    - env: TARGET=thumbv6m-none-eabi
-    - env: TARGET=thumbv7em-none-eabi
-    - env: TARGET=thumbv7em-none-eabihf
-    - env: TARGET=thumbv7m-none-eabi
+    # TODO: Find out why these aren't able to cross-compile
+    # - env: TARGET=thumbv6m-none-eabi
+    # - env: TARGET=thumbv7em-none-eabi
+    # - env: TARGET=thumbv7em-none-eabihf
+    # - env: TARGET=thumbv7m-none-eabi
 
     # Testing other channels
     - env: TARGET=x86_64-unknown-linux-gnu

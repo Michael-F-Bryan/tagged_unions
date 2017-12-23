@@ -8,3 +8,14 @@ license = "MIT"
 repository = "https://github.com/Michael-F-Bryan/tagged_unions"
 
 [dependencies]
+tagged_union_derive = { path = "./tagged_union_derive" }
+
+[badges]
+travis-ci = { repository = "Michael-F-Bryan/tagged_unions" }
+appveyor = { repository = "Michael-F-Bryan/tagged_unions" }
+
+[features]
+default = []
+example = []
+
+[workspace]
