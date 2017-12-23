@@ -34,11 +34,27 @@ pub fn expand(input: &DeriveInput) -> Result<Tokens, Error> {
     // codegen
     let constants = tag_codegen(&tags);
     let the_union = union_codegen(base_name, &typemap);
+    let the_struct = generate_tagged(base_name);
 
     Ok(quote!{
         #constants
         #the_union
+        #the_struct
     })
+}
+
+fn generate_tagged(base_name: &str) -> Tokens {
+    let name = QuotedIdent::new(format!("Tagged{}", base_name));
+    let union_name = QuotedIdent::new(format!("{}Kind", base_name));
+
+    quote! {
+        #[derive(Debug, Copy, Clone)]
+        #[repr(C)]
+        pub struct #name {
+            pub tag: usize,
+            pub kind: #union_name,
+        }
+    }
 }
 
 /// Generate a list of all the types the `FooKind` union will need to contain.
@@ -97,6 +113,7 @@ fn union_codegen(base_name: &str, typemap: &TypeMap) -> Tokens {
     let union_name = QuotedIdent::new(format!("{}Kind", base_name));
 
     quote!{
+        #[derive(Debug, Copy, Clone)]
         pub union #union_name {
             #tokens
         }
